@@ -1,65 +1,208 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+
+type TreeNode = {
+  name: string;
+  path: string;
+  isPage: boolean;
+  pageCount: number;
+  children: TreeNode[];
+};
+
+function buildHierarchy(urls: string[]): TreeNode[] {
+  const root: TreeNode[] = [];
+
+  urls.forEach((url) => {
+    const parsedUrl = new URL(url);
+
+    const segments = parsedUrl.pathname
+      .split("/")
+      .filter(Boolean);
+
+    let currentLevel = root;
+    let currentPath = "";
+
+    segments.forEach((segment, index) => {
+      currentPath += `/${segment}`;
+
+      let node = currentLevel.find(
+        (item) => item.name === segment
+      );
+
+      if (!node) {
+        node = {
+          name: segment,
+          path: currentPath,
+          isPage: false,
+          pageCount: 0,
+          children: [],
+        };
+
+        currentLevel.push(node);
+      }
+
+      node.pageCount += 1;
+
+      if (index === segments.length - 1) {
+        node.isPage = true;
+      }
+
+      currentLevel = node.children;
+    });
+  });
+
+  return root;
+}
+
+function Tree({
+  nodes,
+  level = 0,
+}: {
+  nodes: TreeNode[];
+  level?: number;
+}) {
+  return (
+    <div>
+      {nodes.map((node) => (
+        <div key={node.path}>
+          <div
+            className="flex items-center gap-2 py-2"
+            style={{ paddingLeft: `${level * 24}px` }}
+          >
+            <span>
+              {node.children.length > 0 ? "📁" : "📄"}
+            </span>
+
+            <span className="font-medium">
+              {node.name}
+            </span>
+
+            <span className="text-sm text-gray-500">
+              {node.pageCount}{" "}
+              {node.pageCount === 1 ? "page" : "pages"}
+            </span>
+
+            {node.isPage && (
+              <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-700">
+                Page
+              </span>
+            )}
+          </div>
+
+          {node.children.length > 0 && (
+            <Tree
+              nodes={node.children}
+              level={level + 1}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Home() {
+  const [fileName, setFileName] = useState("");
+  const [urls, setUrls] = useState<string[]>([]);
+  const [hierarchy, setHierarchy] = useState<TreeNode[]>([]);
+
+  function handleFileUpload(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    setFileName(file.name);
+
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const content = e.target?.result;
+
+      if (typeof content !== "string") return;
+
+      const lines = content
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      const dataRows = lines.slice(1);
+
+      const parsedUrls = dataRows
+        .map((line) =>
+          line.replace(/^"|"$/g, "").trim()
+        )
+        .filter((url) => {
+          try {
+            new URL(url);
+            return true;
+          } catch {
+            return false;
+          }
+        });
+
+      setUrls(parsedUrls);
+      setHierarchy(buildHierarchy(parsedUrls));
+    };
+
+    reader.readAsText(file);
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="min-h-screen bg-gray-50 p-10">
+      <h1 className="text-4xl font-bold">
+        Website Intelligence
+      </h1>
+
+      <p className="mt-4 text-lg text-gray-600">
+        Analyse website structure, traffic, SEO and content
+        quality.
+      </p>
+
+      <label className="mt-8 inline-block cursor-pointer rounded bg-black px-6 py-3 text-white">
+        Upload URL CSV
+
+        <input
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={handleFileUpload}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+      </label>
+
+      {fileName && (
+        <div className="mt-8">
+          <p className="font-semibold">
+            Uploaded:
           </p>
+
+          <p className="mt-1 text-gray-600">
+            {fileName}
+          </p>
+
+          <div className="mt-6 rounded-lg border bg-white p-6 shadow-sm">
+            <p className="text-2xl font-bold">
+              {urls.length}
+            </p>
+
+            <p className="text-sm text-gray-500">
+              Total URLs
+            </p>
+          </div>
+
+          <div className="mt-6 rounded-lg border bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-bold">
+              Website hierarchy
+            </h2>
+
+            <div className="mt-6">
+              <Tree nodes={hierarchy} />
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      )}
+    </main>
   );
 }
